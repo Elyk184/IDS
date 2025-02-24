@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
 </head>
 <body class="container d-flex justify-content-center align-items-center vh-100">
     <div class="text-center">
-        <h1 class="mb-4">Welcome Back</h1>
+        <h1 class="mb-4">Welcome</h1>
         <div id="login-form" class="card p-4 shadow-lg" style="width: 22rem;">
             <form method="POST">
                 <input type="text" name="username" class="form-control mb-2" placeholder="Username" required>
