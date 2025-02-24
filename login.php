@@ -7,6 +7,8 @@ $lockout_time = 600; // 10 minutes in seconds
 $ip_address = $_SERVER['REMOTE_ADDR'];
 $time = time();
 
+$login_message = "";
+
 // Check login attempts
 $stmt = $conn->prepare("SELECT attempts, last_attempt FROM login_attempts WHERE ip_address = ?");
 $stmt->bind_param("s", $ip_address);
@@ -17,10 +19,6 @@ $stmt->fetch();
 $stmt->close();
 
 // Calculate lockout status
-$remaining_attempts = $max_attempts - $attempts;
-$lockout_message = "";
-$disable_login = false;
-
 if ($attempts >= $max_attempts) {
     $time_since_last_attempt = $time - $last_attempt;
     $remaining_time = $lockout_time - $time_since_last_attempt;
@@ -28,18 +26,16 @@ if ($attempts >= $max_attempts) {
     if ($remaining_time > 0) {
         $minutes = floor($remaining_time / 60);
         $seconds = $remaining_time % 60;
-        $lockout_message = "<div class='alert alert-danger'>Too many failed attempts. Try again in $minutes minutes and $seconds seconds.</div>";
-        $disable_login = true;
+        $login_message = "<div class='alert alert-danger'>Too many failed attempts. Try again in $minutes minutes and $seconds seconds.</div>";
     } else {
         // Reset lockout if time expired
         $conn->query("DELETE FROM login_attempts WHERE ip_address = '$ip_address'");
-        $remaining_attempts = $max_attempts;
         $attempts = 0;
     }
 }
 
 // Handle login attempt
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login']) && !$disable_login) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login']) && empty($login_message)) {
     $username = $_POST['username'];
     $password = $_POST['password'];
 
@@ -57,7 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login']) && !$disable
         header("Location: index.php");
         exit();
     } else {
-        $remaining_attempts--;
+        $attempts++;
+        $remaining_attempts = $max_attempts - $attempts;
 
         // Update or insert failed login attempt
         $stmt = $conn->prepare("INSERT INTO login_attempts (ip_address, attempts, last_attempt) 
@@ -71,9 +68,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login']) && !$disable
         $conn->query("INSERT INTO logs (timestamp, source_ip, destination_ip, protocol, alert) VALUES (NOW(), '$ip_address', 'Server', 'Login', 'Failed Login Attempt')");
 
         if ($remaining_attempts > 0) {
-            $lockout_message = "<div class='alert alert-warning'>Invalid credentials. You have $remaining_attempts attempts remaining.</div>";
+            $login_message = "<div class='alert alert-warning'>Invalid credentials. You have $remaining_attempts attempts remaining.</div>";
         } else {
-            $lockout_message = "<div class='alert alert-danger'>Too many failed attempts. You are locked out for 10 minutes.</div>";
+            $login_message = "<div class='alert alert-danger'>Too many failed attempts. You are locked out for 10 minutes.</div>";
         }
     }
 }
@@ -108,18 +105,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
         <div id="login-form" class="card p-4 shadow-lg" style="width: 22rem;">
             <h4 class="mb-3">Login</h4>
             
-            <?php echo $lockout_message; ?>  <!-- Show lockout/attempts warning inside login box -->
+            <?php echo $login_message; ?>  <!-- Shows only when login fails -->
 
             <form method="POST">
-                <input type="text" name="username" class="form-control mb-2" placeholder="Username" required <?php echo $disable_login ? 'disabled' : ''; ?>>
-                <input type="password" name="password" class="form-control mb-2" placeholder="Password" required <?php echo $disable_login ? 'disabled' : ''; ?>>
+                <input type="text" name="username" class="form-control mb-2" placeholder="Username" required>
+                <input type="password" name="password" class="form-control mb-2" placeholder="Password" required>
                 
-                <button type="submit" name="login" class="btn btn-primary w-100" <?php echo $disable_login ? 'disabled' : ''; ?>>Login</button>
+                <button type="submit" name="login" class="btn btn-primary w-100">Login</button>
             </form>
-            
-            <?php if (!$disable_login): ?>
-                <p class="text-muted mt-2">You have <strong><?php echo $remaining_attempts; ?></strong> attempts remaining.</p>
-            <?php endif; ?>
 
             <hr>
             <button onclick="showRegisterForm()" class="btn btn-success w-100">Create New Account</button>
